@@ -16,6 +16,8 @@ import Game from './2DGame';
 class App extends React.Component {
   state = {
     loaded: false,
+    dx: 0,
+    dy: 0,
   }
 
   componentWillMount() {
@@ -39,24 +41,44 @@ class App extends React.Component {
     }
   }
 
-  _onPressButton = () => {
+  _onPressLeft = () => {
+    this.setState({dx: -1});
+  }
 
+  _onPressRight = () => {
+    this.setState({dx: 1});
+  }
+
+  _onPressIn = () => {
+    this.setState({dy: -1});
+  }
+
+  _onPressOut = () => {
+    this.setState({dy: 1});
+  }
+
+  _onReleaseX = () => {
+    this.setState({dx: 0});
+  }
+
+  _onReleaseY = () => {
+    this.setState({dy: 0});
   }
 
   render() {
     return this.state.loaded ? (
       <View style={{flex: 1}} >
-        <Game style={{ flex: 1 }} />
-        <TouchableHighlight onPress={this._onPressButton} style={styles.leftButton} underlayColor="gray">
+        <Game style={{ flex: 1 }} dx={this.state.dx} dy={this.state.dy} />
+        <TouchableHighlight onPressIn={this._onPressLeft} onPressOut={this._onReleaseX} style={styles.leftButton} underlayColor="gray">
           <Text>LEFT</Text>
         </TouchableHighlight>
-        <TouchableHighlight onPress={this._onPressButton} style={styles.rightButton} underlayColor="gray">
+        <TouchableHighlight onPressIn={this._onPressRight} onPressOut={this._onReleaseX} style={styles.rightButton} underlayColor="gray">
           <Text>RIGHT</Text>
         </TouchableHighlight>
-        <TouchableHighlight onPress={this._onPressButton} style={styles.reelInButton} underlayColor="gray">
+        <TouchableHighlight onPressIn={this._onPressIn} onPressOut={this._onReleaseY} style={styles.reelInButton} underlayColor="gray">
           <Text>IN</Text>
         </TouchableHighlight>
-        <TouchableHighlight onPress={this._onPressButton} style={styles.reelOutButton} underlayColor="gray">
+        <TouchableHighlight onPressIn={this._onPressOut} onPressOut={this._onReleaseY} style={styles.reelOutButton} underlayColor="gray">
           <Text>OUT</Text>
         </TouchableHighlight>
       </View>
