@@ -52,9 +52,11 @@ const waterpercentage = 0.7;
 const waterheight = 4;
 const boatwidth = 0.5;
 const boatheight = 0.5;
+const MAX_FISHES = 8;
 
 export default class Game extends React.Component {
   state = {
+    isRunning: false,
     loaded: false,
     dx: 0,
     dy: 0,
@@ -157,8 +159,6 @@ export default class Game extends React.Component {
     this.fishMaterial.side = THREE.DoubleSide;
 
 
-    let time = this.time();
-    this.fishes = [this.newfish(time), this.newfish(time), this.newfish(time)];
 
 
     //// Events
@@ -201,7 +201,7 @@ export default class Game extends React.Component {
   rotatefish = (fish, time) => {
     if (fish.caught) {
       fish.mesh.scale.y = fish.size;
-      fish.mesh.rotation.z = -Math.PI / 2.0 + Math.sin(fish.randomseed + time * 10 * fish.randomseed) * 0.1;
+      fish.mesh.rotation.z = -Math.PI / 2.0 + Math.sin(fish.randomseed + time * 20 * fish.randomseed) * 0.1;
     } else if (fish.dx < 0) {
       fish.mesh.scale.y = -fish.size;
       fish.mesh.rotation.z = 0;
@@ -219,6 +219,7 @@ export default class Game extends React.Component {
       mesh: new THREE.Mesh(this.fishGeometry, this.fishMaterial),
       dx,
       x: dx > 0 ? this.leftScreen - 0.1 : this.rightScreen + 0.1,
+      y: 10000, // this will get set later
       yBeforeTransformation: this.randomHeightInWater(),
       yTravel: Math.random() * 0.3 + 0.05,
       randomseed: Math.random(),
@@ -226,10 +227,14 @@ export default class Game extends React.Component {
     };
     fish.mesh.scale.x = fish.size;
     fish.mesh.scale.y = fish.size;
-    this.computeFishY(fish, time);
+    fish.mesh.position.y = 10000;
     this.rotatefish(fish, time);
     this.scene.add(fish.mesh);
     return fish;
+  }
+
+  addfish = (time) => {
+    this.fishes.push(this.newfish(time));
   }
 
   fishTick = (fish, dt, time, lineX, lineY) => {
@@ -241,7 +246,7 @@ export default class Game extends React.Component {
       let initialDx = fish.dx;
       fish.x += fish.dx * dt * fish.speed;
       this.computeFishY(fish, time);
-      if (Math.random() < dt * 0.2) {
+      if (Math.random() < dt / 5.0) { // approx every 5 seconds
         fish.dx = -fish.dx;
       }
 
@@ -265,12 +270,32 @@ export default class Game extends React.Component {
     fish.mesh.position.y = fish.y;
   }
 
+  updateScore = (d) => {
+    this.props.updateScore(d);
+  }
+
   componentWillReceiveProps(nextProps) {
     if (nextProps.dx !== this.state.dx || nextProps.dy !== this.state.dy) {
       this.setState({
         dx: nextProps.dx,
         dy: nextProps.dy,
       })
+    }
+
+    if (nextProps.isRunning !== this.state.isRunning) {
+      if (nextProps.isRunning) {
+        let time = this.time();
+        this.fishes = [this.newfish(time), this.newfish(time), this.newfish(time)];
+      } else {
+        for (let i = 0; i < this.fishes.length; i++) {
+          this.scene.remove(this.fishes[i].mesh);
+        }
+        this.fishes = [];
+      }
+
+      this.setState({
+        isRunning: nextProps.isRunning,
+      });
     }
   }
 
@@ -279,24 +304,26 @@ export default class Game extends React.Component {
   }
 
   tick = (dt) => {
-    this.boatx += dt * this.state.dx;
-    if (this.boatx < -2) {
-      this.boatx = -2;
-    } else if (this.boatx > 2) {
-      this.boatx = 2;
-    }
+    if (this.state.isRunning) {
+      this.boatx += dt * this.state.dx;
+      if (this.boatx < -2) {
+        this.boatx = -2;
+      } else if (this.boatx > 2) {
+        this.boatx = 2;
+      }
 
-    this.lineHeight += dt * this.state.dy;
-    if (this.lineHeight < 0) {
-      this.lineHeight = 0;
-    } else if (this.lineHeight > 2.0) {
-      this.lineHeight = 2.0;
+      this.lineHeight += dt * this.state.dy;
+      if (this.lineHeight < 0.01) {
+        this.lineHeight = 0.01;
+      } else if (this.lineHeight > 2.0) {
+        this.lineHeight = 2.0;
+      }
     }
 
     this.boatMesh.position.x = this.boatx;
     this.lineMesh.position.x = this.boatx;
 
-    this.lineMesh.scale.y = this.lineHeight;
+    this.lineMesh.scale.y = this.lineHeight; // can't be 0
 
     let time = this.time();
     this.waterMaterial.uniforms[ 'time' ].value = time;
@@ -308,9 +335,28 @@ export default class Game extends React.Component {
     let lineX = this.boatx;
     let lineY = topOfWaterY - this.lineHeight;
 
-    for (let i = 0; i < this.fishes.length; i++) {
-      this.fishTick(this.fishes[i], dt, time, lineX, lineY);
+    if (this.state.isRunning) {
+      for (let i = this.fishes.length - 1; i >= 0; i--) {
+        let fish = this.fishes[i];
+        this.fishTick(fish, dt, time, lineX, lineY);
+        if (this.lineHeight < 0.1 && fish.caught) {
+          this.updateScore(10);
+          this.scene.remove(fish.mesh);
+          this.fishes.splice(i, 1);
+        }
+      }
+
+      if (this.fishes.length < MAX_FISHES && Math.random() < dt / 7.0) {
+        this.addfish(time);
+      }
+
+      if (this.fishes.length === 0) {
+        this.addfish(time);
+      }
     }
+
+    this.props.tick();
+    this.props.onGameLoaded();
   }
 
   render() {
