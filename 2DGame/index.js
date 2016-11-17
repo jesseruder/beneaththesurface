@@ -120,6 +120,7 @@ export default class Game extends React.Component {
       transparent: true,  // Use the image's alpha channel for alpha.
     });
 
+    this.boatx = 0.5;
     this.boatMesh = new THREE.Mesh(this.boatGeometry, this.boatMaterial);
     this.boatMesh.position.x = this.boatMesh.position.y = 0.5;
     this.boatMesh.position.z = 20;     // This puts this sprite behind our previous one.
@@ -127,16 +128,26 @@ export default class Game extends React.Component {
     this.scene.add(this.boatMesh);
 
 
+
+    ////////// FISHING LINE
+    this.lineHeight = 1.0;
+    this.lineGeometry = new THREE.PlaneBufferGeometry(0.02, 1.0);
+    this.lineMaterial = new THREE.MeshBasicMaterial({
+      color: 0x777777,
+    });
+    this.lineMesh = new THREE.Mesh(this.lineGeometry, this.lineMaterial);
+    this.lineMesh.position.y = 0.5;
+    this.scene.add(this.lineMesh);
+
+
+
+
+
+
     //// Events
 
     // This function is called every frame, with `dt` being the time in seconds
     // elapsed since the last call.
-    this.tick = (dt) => {
-      let time = .0005 * (Date.now() - startTime);
-      this.waterMaterial.uniforms[ 'time' ].value = time;
-      this.boatMesh.position.y = getDisplacement(this.boatMesh.position.x, time) + waterdy + waterheight / 2.0 + boatheight / 2.0 - 0.1;
-      this.boatMesh.rotation.z = Math.PI + Math.atan2(getDisplacement(this.boatMesh.position.x + boatwidth/2.0, time) - getDisplacement(this.boatMesh.position.x -+ boatwidth/2.0, time), boatwidth);
-    }
 
     // These functions are called on touch and release of the view respectively.
     this.touch = (_, gesture) => {
@@ -169,6 +180,34 @@ export default class Game extends React.Component {
         dy: nextProps.dy,
       })
     }
+  }
+
+  tick = (dt) => {
+    this.boatx += dt * this.state.dx;
+    if (this.boatx < -2) {
+      this.boatx = -2;
+    } else if (this.boatx > 2) {
+      this.boatx = 2;
+    }
+
+    this.lineHeight += dt * this.state.dy;
+    if (this.lineHeight < 0.2) {
+      this.lineHeight = 0.2;
+    } else if (this.lineHeight > 1.5) {
+      this.lineHeight = 1.5;
+    }
+
+    this.boatMesh.position.x = this.boatx;
+    this.lineMesh.position.x = this.boatx;
+
+    this.lineMesh.scale.y = this.lineHeight;
+
+    let time = .0005 * (Date.now() - startTime);
+    this.waterMaterial.uniforms[ 'time' ].value = time;
+    let topOfWaterY = getDisplacement(this.boatMesh.position.x, time) + waterdy + waterheight / 2.0;
+    this.boatMesh.position.y = topOfWaterY + boatheight / 2.0 - 0.1;
+    this.lineMesh.position.y = topOfWaterY - this.lineHeight/2.0;
+    this.boatMesh.rotation.z = Math.PI + Math.atan2(getDisplacement(this.boatMesh.position.x + boatwidth/2.0, time) - getDisplacement(this.boatMesh.position.x -+ boatwidth/2.0, time), boatwidth);
   }
 
   render() {
