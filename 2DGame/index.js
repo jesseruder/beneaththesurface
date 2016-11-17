@@ -48,8 +48,8 @@ function getDisplacement(posx, time) {
 }
 
 const startTime = Date.now();
-const waterdy = -0.5;
-const waterheight = 2;
+const waterpercentage = 0.7;
+const waterheight = 4;
 const boatwidth = 0.5;
 const boatheight = 0.5;
 
@@ -75,15 +75,19 @@ export default class Game extends React.Component {
     //
     // The width of the view will be 4 world-space units. The height is set based
     // on the phone screen's aspect ratio.
-    const width = 4;
+    this.width = 4;
     const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-    const height = (screenHeight / screenWidth) * width;
+    this.height = (screenHeight / screenWidth) * this.width;
     this.camera = new THREE.OrthographicCamera(
-      -width / 2, width / 2,
-      height / 2, -height / 2,
+      -this.width / 2, this.width / 2,
+      this.height / 2, -this.height / 2,
       1, 10000,
     );
     this.camera.position.z = 1000;
+    this.leftScreen = -this.width/2;
+    this.rightScreen = this.width/2;
+    this.topScreen = this.height/2;
+    this.bottomScreen = -this.height/2;
 
 
     //// Scene, sprites
@@ -105,7 +109,8 @@ export default class Game extends React.Component {
       fragmentShader: waterFragShader,
     });
     this.waterMesh = new THREE.Mesh(this.waterGeometry, this.waterMaterial);
-    this.waterMesh.position.y = waterdy;
+    this.fixedTopOfWaterY = this.height * waterpercentage + this.bottomScreen;
+    this.waterMesh.position.y = this.fixedTopOfWaterY - waterheight/2.0;
     this.scene.add(this.waterMesh);
 
 
@@ -140,8 +145,20 @@ export default class Game extends React.Component {
     this.scene.add(this.lineMesh);
 
 
+    //////// FISH
+    this.fishGeometry = new THREE.PlaneBufferGeometry(1.0, 1.0);
+    this.fishTexture = THREEView.textureFromAsset(Assets['goodfish']);
+    this.fishTexture.minFilter = this.fishTexture.magFilter = THREE.NearestFilter;
+    this.fishTexture.needsUpdate = true;
+    this.fishMaterial = new THREE.MeshBasicMaterial({
+      map: this.fishTexture,
+      transparent: true,  // Use the image's alpha channel for alpha.
+    });
+    this.fishMaterial.side = THREE.DoubleSide;
 
 
+    let time = this.time();
+    this.fishes = [this.newfish(time), this.newfish(time), this.newfish(time)];
 
 
     //// Events
@@ -173,6 +190,81 @@ export default class Game extends React.Component {
     });
   }
 
+  randomHeightInWater = () => {
+    return this.bottomScreen + Math.random() * (this.fixedTopOfWaterY - this.bottomScreen) * 0.7;
+  }
+
+  computeFishY = (fish, time) => {
+    fish.y = fish.yBeforeTransformation + Math.sin(fish.randomseed * 2 * Math.PI + time) * fish.yTravel;
+  }
+
+  rotatefish = (fish, time) => {
+    if (fish.caught) {
+      fish.mesh.scale.y = fish.size;
+      fish.mesh.rotation.z = -Math.PI / 2.0 + Math.sin(fish.randomseed + time * 10 * fish.randomseed) * 0.1;
+    } else if (fish.dx < 0) {
+      fish.mesh.scale.y = -fish.size;
+      fish.mesh.rotation.z = 0;
+    } else {
+      fish.mesh.scale.y = fish.size;
+      fish.mesh.rotation.z = Math.PI;
+    }
+  }
+
+  newfish = (time) => {
+    let dx = Math.random() > 0.5 ? 1.0 : -1.0;
+    let fish = {
+      caught: false,
+      speed: 0.3,
+      mesh: new THREE.Mesh(this.fishGeometry, this.fishMaterial),
+      dx,
+      x: dx > 0 ? this.leftScreen - 0.1 : this.rightScreen + 0.1,
+      yBeforeTransformation: this.randomHeightInWater(),
+      yTravel: Math.random() * 0.3 + 0.05,
+      randomseed: Math.random(),
+      size: 0.3,
+    };
+    fish.mesh.scale.x = fish.size;
+    fish.mesh.scale.y = fish.size;
+    this.computeFishY(fish, time);
+    this.rotatefish(fish, time);
+    this.scene.add(fish.mesh);
+    return fish;
+  }
+
+  fishTick = (fish, dt, time, lineX, lineY) => {
+    if (fish.caught) {
+      fish.x = lineX + fish.randomseed * 0.1 - 0.05;
+      fish.y = lineY;
+      this.rotatefish(fish, time);
+    } else {
+      let initialDx = fish.dx;
+      fish.x += fish.dx * dt * fish.speed;
+      this.computeFishY(fish, time);
+      if (Math.random() < dt * 0.2) {
+        fish.dx = -fish.dx;
+      }
+
+      if (fish.x < this.leftScreen - 0.2) {
+        fish.dx = Math.abs(fish.dx);
+      } else if (fish.x > this.rightScreen + 0.2) {
+        fish.dx = -Math.abs(fish.dx);
+      }
+
+      if (fish.dx !== initialDx) {
+        this.rotatefish(fish, time);
+      }
+
+      let dist = Math.sqrt(Math.pow(lineX - fish.x, 2) + Math.pow(lineY - fish.y, 2));
+      if (dist < 0.1) {
+        fish.caught = true;
+      }
+    }
+
+    fish.mesh.position.x = fish.x;
+    fish.mesh.position.y = fish.y;
+  }
+
   componentWillReceiveProps(nextProps) {
     if (nextProps.dx !== this.state.dx || nextProps.dy !== this.state.dy) {
       this.setState({
@@ -180,6 +272,10 @@ export default class Game extends React.Component {
         dy: nextProps.dy,
       })
     }
+  }
+
+  time = () => {
+    return .0005 * (Date.now() - startTime);
   }
 
   tick = (dt) => {
@@ -191,10 +287,10 @@ export default class Game extends React.Component {
     }
 
     this.lineHeight += dt * this.state.dy;
-    if (this.lineHeight < 0.2) {
-      this.lineHeight = 0.2;
-    } else if (this.lineHeight > 1.5) {
-      this.lineHeight = 1.5;
+    if (this.lineHeight < 0) {
+      this.lineHeight = 0;
+    } else if (this.lineHeight > 2.0) {
+      this.lineHeight = 2.0;
     }
 
     this.boatMesh.position.x = this.boatx;
@@ -202,12 +298,19 @@ export default class Game extends React.Component {
 
     this.lineMesh.scale.y = this.lineHeight;
 
-    let time = .0005 * (Date.now() - startTime);
+    let time = this.time();
     this.waterMaterial.uniforms[ 'time' ].value = time;
-    let topOfWaterY = getDisplacement(this.boatMesh.position.x, time) + waterdy + waterheight / 2.0;
+    let topOfWaterY = getDisplacement(this.boatMesh.position.x, time) + this.fixedTopOfWaterY;
     this.boatMesh.position.y = topOfWaterY + boatheight / 2.0 - 0.1;
     this.lineMesh.position.y = topOfWaterY - this.lineHeight/2.0;
     this.boatMesh.rotation.z = Math.PI + Math.atan2(getDisplacement(this.boatMesh.position.x + boatwidth/2.0, time) - getDisplacement(this.boatMesh.position.x -+ boatwidth/2.0, time), boatwidth);
+
+    let lineX = this.boatx;
+    let lineY = topOfWaterY - this.lineHeight;
+
+    for (let i = 0; i < this.fishes.length; i++) {
+      this.fishTick(this.fishes[i], dt, time, lineX, lineY);
+    }
   }
 
   render() {
