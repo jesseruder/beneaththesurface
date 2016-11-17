@@ -157,6 +157,10 @@ export default class Game extends React.Component {
       transparent: true,  // Use the image's alpha channel for alpha.
     });
     this.fishMaterial.side = THREE.DoubleSide;
+    this.fishMeshPool = [];
+    for (let i = 0; i < MAX_FISHES + 2; i++) {
+      this.fishMeshPool.push(new THREE.Mesh(this.fishGeometry, this.fishMaterial));
+    }
 
 
 
@@ -216,7 +220,7 @@ export default class Game extends React.Component {
     let fish = {
       caught: false,
       speed: 0.3,
-      mesh: new THREE.Mesh(this.fishGeometry, this.fishMaterial),
+      mesh: this.fishMeshPool.pop(),
       dx,
       x: dx > 0 ? this.leftScreen - 0.1 : this.rightScreen + 0.1,
       y: 10000, // this will get set later
@@ -231,6 +235,11 @@ export default class Game extends React.Component {
     this.rotatefish(fish, time);
     this.scene.add(fish.mesh);
     return fish;
+  }
+
+  destroyfish = (fish) => {
+    this.scene.remove(fish.mesh);
+    this.fishMeshPool.push(fish.mesh);
   }
 
   addfish = (time) => {
@@ -288,7 +297,7 @@ export default class Game extends React.Component {
         this.fishes = [this.newfish(time), this.newfish(time), this.newfish(time)];
       } else {
         for (let i = 0; i < this.fishes.length; i++) {
-          this.scene.remove(this.fishes[i].mesh);
+          this.destroyfish(this.fishes[i]);
         }
         this.fishes = [];
       }
@@ -341,7 +350,7 @@ export default class Game extends React.Component {
         this.fishTick(fish, dt, time, lineX, lineY);
         if (this.lineHeight < 0.1 && fish.caught) {
           this.updateScore(10);
-          this.scene.remove(fish.mesh);
+          this.destroyfish(fish);
           this.fishes.splice(i, 1);
         }
       }
