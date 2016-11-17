@@ -18,6 +18,41 @@ import Assets from '../Assets';
 
 // Render the game as a `View` component.
 
+const waterVertShader = `
+varying vec2 vUv;
+uniform float time;
+
+void main() {
+
+    vUv = uv;
+
+    float x = time + position.x;
+    float displacement = (sin(x) + sin(2.2*x+5.52)) / 2.0;
+
+    vec3 newPosition = position + vec3(0.0, 1.0, 0.0) * displacement * 0.1;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4( newPosition, 1.0 );
+}`;
+
+const waterFragShader = `
+varying vec2 vUv;
+
+void main() {
+    gl_FragColor = vec4( 0.0,0.0,1.0, 1.0 );
+
+}`;
+
+function getDisplacement(posx, time) {
+  let x = time + posx;
+  let displacement = (Math.sin(x) + Math.sin(2.2*x+5.52)) / 2.0;
+  return displacement * 0.1;
+}
+
+const startTime = Date.now();
+const waterdy = -0.5;
+const waterheight = 2;
+const boatwidth = 0.5;
+const boatheight = 0.5;
+
 export default (viewProps) => {
   //// Camera
 
@@ -48,43 +83,44 @@ export default (viewProps) => {
 
   // We just use a regular `THREE.Scene`
   const scene = new THREE.Scene();
+  scene.background = new THREE.Color( 0x87CEFA );
 
-  // Making a sprite involves three steps which are outlined below. You probably
-  // would want to combine them into a utility function with defaults pertinent
-  // to your game.
+  /////// WATER
+  const waterGeometry = new THREE.PlaneBufferGeometry(4, waterheight, 100);
+  const waterMaterial = new THREE.ShaderMaterial( {
+    uniforms: {
+        time: { // float initialized to 0
+            type: "f",
+            value: 0.0
+        }
+    },
+    vertexShader: waterVertShader,
+    fragmentShader: waterFragShader,
+  });
+  const waterMesh = new THREE.Mesh(waterGeometry, waterMaterial);
+  waterMesh.position.y = waterdy;
+  scene.add(waterMesh);
 
-  // 1: Geometry
-  // This defines the local shape of the object. In this case the geometry
-  // will simply be a 1x1 plane facing the camera.
-  const geometry = new THREE.PlaneBufferGeometry(1, 1);
 
-  // 2: Material
-  // This defines how the surface of the shape is painted. In this case we
-  // want to paint a texture loaded from an asset and also tint it.
-  // Nearest-neighbor filtering with `THREE.NearestFilter` is nice for
-  // pixel art styles.
-  const texture = THREEView.textureFromAsset(Assets['player-sprite']);
-  texture.minFilter = texture.magFilter = THREE.NearestFilter;
-  texture.needsUpdate = true;
-  const material = new THREE.MeshBasicMaterial({
-    map: texture,
-    color: 0xff0000,    // Sprites can be tinted with a color.
+  //////// BOAT
+  const boatGeometry = new THREE.PlaneBufferGeometry(boatwidth, boatheight);
+  const boatTexture = THREEView.textureFromAsset(Assets['boat']);
+  boatTexture.minFilter = boatTexture.magFilter = THREE.NearestFilter;
+  boatTexture.needsUpdate = true;
+  const boatMaterial = new THREE.MeshBasicMaterial({
+    map: boatTexture,
+    //color: 0xff0000,    // Sprites can be tinted with a color.
     transparent: true,  // Use the image's alpha channel for alpha.
   });
 
-  // 3: Mesh
-  // A mesh is a node in THREE's scenegraph and refers to a geometry and a
-  // material to draw itself. It can be translated and rotated as any other
-  // scenegraph node.
-  const mesh = new THREE.Mesh(geometry, material);
-  scene.add(mesh);
+  const boatMesh = new THREE.Mesh(boatGeometry, boatMaterial);
+  boatMesh.position.x = boatMesh.position.y = 0.5;
+  boatMesh.position.z = 20;     // This puts this sprite behind our previous one.
+  boatMesh.rotation.z = Math.PI;
+  scene.add(boatMesh);
 
-  // Geometries and materials can be reused.
-  const mesh2 = new THREE.Mesh(geometry, material);
-  mesh2.position.x = mesh2.position.y = 0.5;
-  mesh2.position.z = -40;     // This puts this sprite behind our previous one.
-  mesh2.rotation.z = Math.PI;
-  scene.add(mesh2);
+
+
 
 
   //// Events
@@ -92,15 +128,18 @@ export default (viewProps) => {
   // This function is called every frame, with `dt` being the time in seconds
   // elapsed since the last call.
   const tick = (dt) => {
-    mesh.rotation.z += 2 * dt;
+    let time = .0005 * (Date.now() - startTime);
+    waterMaterial.uniforms[ 'time' ].value = time;
+    boatMesh.position.y = getDisplacement(boatMesh.position.x, time) + waterdy + waterheight / 2.0 + boatheight / 2.0 - 0.1;
+    boatMesh.rotation.z = Math.PI + Math.atan2(getDisplacement(boatMesh.position.x + boatwidth/2.0, time) - getDisplacement(boatMesh.position.x -+ boatwidth/2.0, time), boatwidth);
   }
 
   // These functions are called on touch and release of the view respectively.
   const touch = (_, gesture) => {
-    material.color.setHex(0x00ff00);
+    //material.color.setHex(0x00ff00);
   };
   const release = (_, gesture) => {
-    material.color.setHex(0xff0000);
+    //material.color.setHex(0xff0000);
   }
 
 
@@ -126,6 +165,3 @@ export default (viewProps) => {
     />
   );
 };
-
-
-

@@ -1,6 +1,7 @@
 import Exponent from 'exponent';
 import React from 'react';
-import { Alert, PanResponder } from 'react-native';
+import { Alert, PanResponder, View, TouchableHighlight, Text,
+  StyleSheet, } from 'react-native';
 
 import Assets from './Assets';
 // import Game from './3DGame';
@@ -38,13 +39,39 @@ class App extends React.Component {
     }
   }
 
+  _onPressButton = () => {
+
+  }
+
   render() {
     return this.state.loaded ? (
-      <Game style={{ flex: 1 }} />
+      <View style={{flex: 1}} >
+        <Game style={{ flex: 1 }} />
+        <TouchableHighlight onPress={this._onPressButton} style={styles.leftButton} underlayColor="gray">
+          <Text>LEFT</Text>
+        </TouchableHighlight>
+        <TouchableHighlight onPress={this._onPressButton} style={styles.rightButton} underlayColor="gray">
+          <Text>RIGHT</Text>
+        </TouchableHighlight>
+        <TouchableHighlight onPress={this._onPressButton} style={styles.reelInButton} underlayColor="gray">
+          <Text>IN</Text>
+        </TouchableHighlight>
+        <TouchableHighlight onPress={this._onPressButton} style={styles.reelOutButton} underlayColor="gray">
+          <Text>OUT</Text>
+        </TouchableHighlight>
+      </View>
     ) : (
       <Exponent.Components.AppLoading />
     );
   }
 }
+
+var styles = StyleSheet.create({
+  leftButton: {width: 50, height: 50, position: 'absolute', backgroundColor: 'white', flex: 1, alignItems: 'center', justifyContent: 'center', bottom: 30, left: 10},
+  rightButton: {width: 50, height: 50, position: 'absolute', backgroundColor: 'white', flex: 1, alignItems: 'center', justifyContent: 'center', bottom: 30, right: 10},
+  reelInButton: {width: 50, height: 50, position: 'absolute', backgroundColor: 'white', flex: 1, alignItems: 'center', justifyContent: 'center', bottom: 90, left: 10},
+  reelOutButton: {width: 50, height: 50, position: 'absolute', backgroundColor: 'white', flex: 1, alignItems: 'center', justifyContent: 'center', bottom: 90, right: 10},
+});
+
 
 Exponent.registerRootComponent(App);
