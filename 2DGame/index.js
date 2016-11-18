@@ -35,13 +35,20 @@ void main() {
 }`;
 
 const waterFragShader = `
+uniform sampler2D texture;
+uniform float time;
 varying vec2 vUv;
 
 void main() {
-    gl_FragColor = vec4( 0.0,0.0,0.5*vUv.y, 1.0 );
-
+    vec2 disp = vec2((sin(time / 4.5)/2.0 + sin(vUv.y * 5.3 + time / 5.0) + sin(vUv.x * 8.3 + time / 12.0)) / 4.0, (sin(time * 3.4 + time / 3.0)/2.0 + sin(vUv.x * 4.8 + time / 7.0) + sin(vUv.y * 7.5)) / 4.0);
+    vec2 pos = vec2(mod(disp.x + vUv.x * 4.0, 1.0), mod(disp.y + vUv.y * 4.0, 1.0));
+    float amt = texture2D(texture, pos).r * 0.7;
+    float whiteAmount = 0.0;
+    if (vUv.y > 0.98) {
+      whiteAmount = (vUv.y - 0.98) / (1.0 - 0.985);
+    }
+    gl_FragColor = vec4(amt*vUv.y + whiteAmount,amt*vUv.y + whiteAmount,0.7*vUv.y + amt*vUv.y + whiteAmount, 1.0 );
 }`;
-
 function getDisplacement(posx, time) {
   let x = time + posx;
   let displacement = (Math.sin(x) + Math.sin(2.2*x+5.52)) / 2.0;
@@ -106,12 +113,19 @@ export default class Game extends React.Component {
 
     /////// WATER
     this.waterGeometry = new THREE.PlaneBufferGeometry(4, waterheight, 100);
+    this.waterTexture = THREEView.textureFromAsset(Assets['water']);
+    this.waterTexture.minFilter = this.waterTexture.magFilter = THREE.NearestFilter;
+    this.waterTexture.needsUpdate = true;
     this.waterMaterial = new THREE.ShaderMaterial( {
       uniforms: {
           time: { // float initialized to 0
               type: "f",
               value: 0.0
-          }
+          },
+          texture: {
+            type: 't',
+            value: this.waterTexture,
+          },
       },
       vertexShader: waterVertShader,
       fragmentShader: waterFragShader,
@@ -219,7 +233,7 @@ export default class Game extends React.Component {
 			colorRandomness: .2,
 			turbulence: .001,
 			lifetime: 0.2,
-			size: 200,
+			size: 300,
 			sizeRandomness: 100,
 		};
 		this.particleSpawnerOptions = {
@@ -378,6 +392,7 @@ export default class Game extends React.Component {
             let dist = Math.sqrt(Math.pow(fish.x - otherfish.x, 2) + Math.pow(fish.y - otherfish.y, 2));
             if (dist < SHARK_EAT_DIST) {
               otherfish.shouldDestroy = true;
+              this.addExplosion(otherfish.x, otherfish.y);
             }
           }
         }
@@ -424,7 +439,6 @@ export default class Game extends React.Component {
       let dist = Math.sqrt(Math.pow(lineX - fish.x, 2) + Math.pow(lineY - fish.y, 2));
       if (dist < fish.hitbox) {
         fish.caught = true;
-        this.addExplosion(lineX, lineY);
       }
     }
 
@@ -513,7 +527,7 @@ export default class Game extends React.Component {
     let time = this.time();
     this.waterMaterial.uniforms[ 'time' ].value = time;
     let topOfWaterY = getDisplacement(this.boatMesh.position.x, time) + this.fixedTopOfWaterY;
-    this.boatMesh.position.y = topOfWaterY + boatheight / 2.0 - 0.1;
+    this.boatMesh.position.y = topOfWaterY + boatheight / 2.0 - 0.05;//0.1
     this.lineMesh.position.y = topOfWaterY - this.lineHeight/2.0;
     this.boatMesh.rotation.z = Math.PI + Math.atan2(getDisplacement(this.boatMesh.position.x + boatwidth/2.0, time) - getDisplacement(this.boatMesh.position.x -+ boatwidth/2.0, time), boatwidth);
 
