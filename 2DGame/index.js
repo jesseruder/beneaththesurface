@@ -164,6 +164,14 @@ export default class Game extends React.Component {
 
 
 
+    this.specialFishMaterial = new THREE.MeshBasicMaterial({
+      map: this.fishTexture,
+      color: 0x990000,
+      transparent: true,  // Use the image's alpha channel for alpha.
+    });
+    this.specialFishMaterial.side = THREE.DoubleSide;
+
+
 
     //// Events
 
@@ -198,8 +206,12 @@ export default class Game extends React.Component {
     return this.bottomScreen + Math.random() * (this.fixedTopOfWaterY - this.bottomScreen) * 0.7;
   }
 
+  randomHeightInWaterPercent = (percent) => {
+    return this.bottomScreen + Math.random() * (this.fixedTopOfWaterY - this.bottomScreen) * 0.7 * percent;
+  }
+
   computeFishY = (fish, time) => {
-    fish.y = fish.yBeforeTransformation + Math.sin(fish.randomseed * 2 * Math.PI + time) * fish.yTravel;
+    fish.y = fish.yBeforeTransformation + Math.sin(fish.randomseed * 2 * Math.PI + time * fish.speed * 5.0) * fish.yTravel;
   }
 
   rotatefish = (fish, time) => {
@@ -215,12 +227,13 @@ export default class Game extends React.Component {
     }
   }
 
-  newfish = (time) => {
+  newfish = (time, options, meshFn) => {
     let dx = Math.random() > 0.5 ? 1.0 : -1.0;
     let fish = {
       caught: false,
       speed: 0.3,
-      mesh: this.fishMeshPool.pop(),
+      mesh: meshFn ? meshFn() : this.fishMeshPool.pop(),
+      shouldReturnMesh: !meshFn,
       dx,
       x: dx > 0 ? this.leftScreen - 0.1 : this.rightScreen + 0.1,
       y: 10000, // this will get set later
@@ -228,7 +241,12 @@ export default class Game extends React.Component {
       yTravel: Math.random() * 0.3 + 0.05,
       randomseed: Math.random(),
       size: 0.3,
+      points: 10,
+      tickFn: null,
     };
+    if (options) {
+      fish = Object.assign(fish, options);
+    }
     fish.mesh.scale.x = fish.size;
     fish.mesh.scale.y = fish.size;
     fish.mesh.position.y = 10000;
@@ -239,31 +257,63 @@ export default class Game extends React.Component {
 
   destroyfish = (fish) => {
     this.scene.remove(fish.mesh);
-    this.fishMeshPool.push(fish.mesh);
+    if (fish.shouldReturnMesh) {
+      this.fishMeshPool.push(fish.mesh);
+    }
   }
 
   addfish = (time) => {
-    this.fishes.push(this.newfish(time));
+    if (Math.random() < 0.05) {
+      this.addspecialfish(time);
+    } else {
+      this.fishes.push(this.newfish(time));
+    }
   }
 
+  addspecialfish = (time) => {
+    let fish = this.newfish(time, {
+      speed: 1.0,
+      points: 40,
+      yBeforeTransformation: this.randomHeightInWaterPercent(0.6),
+      yTravel: Math.random() * 0.8 + 0.1,
+      tickFn: (fish, dt, time) => {
+        if (fish.x < this.leftScreen - 0.15 || fish.x > this.rightScreen + 0.15) {
+          return true;
+        }
+
+        return false;
+      },
+    }, () => {
+      return new THREE.Mesh(this.fishGeometry, this.specialFishMaterial);
+    });
+    this.fishes.push(fish);
+  }
+
+  moveFish = (fish, dt, time) => {
+    fish.x += fish.dx * dt * fish.speed;
+    this.computeFishY(fish, time);
+    if (Math.random() < dt / 5.0) { // approx every 5 seconds
+      fish.dx = -fish.dx;
+    }
+
+    if (fish.x < this.leftScreen - 0.2) {
+      fish.dx = Math.abs(fish.dx);
+    } else if (fish.x > this.rightScreen + 0.2) {
+      fish.dx = -Math.abs(fish.dx);
+    }
+  }
+
+  // return true if should destroy
   fishTick = (fish, dt, time, lineX, lineY) => {
+    let returnValue = false;
     if (fish.caught) {
       fish.x = lineX + fish.randomseed * 0.1 - 0.05;
       fish.y = lineY;
       this.rotatefish(fish, time);
     } else {
       let initialDx = fish.dx;
-      fish.x += fish.dx * dt * fish.speed;
-      this.computeFishY(fish, time);
-      if (Math.random() < dt / 5.0) { // approx every 5 seconds
-        fish.dx = -fish.dx;
-      }
 
-      if (fish.x < this.leftScreen - 0.2) {
-        fish.dx = Math.abs(fish.dx);
-      } else if (fish.x > this.rightScreen + 0.2) {
-        fish.dx = -Math.abs(fish.dx);
-      }
+      this.moveFish(fish, dt, time);
 
       if (fish.dx !== initialDx) {
         this.rotatefish(fish, time);
@@ -272,11 +322,15 @@ export default class Game extends React.Component {
       let dist = Math.sqrt(Math.pow(lineX - fish.x, 2) + Math.pow(lineY - fish.y, 2));
       if (dist < 0.1) {
         fish.caught = true;
+      } else if (fish.tickFn) {
+        returnValue = fish.tickFn(fish, dt, time);
       }
     }
 
     fish.mesh.position.x = fish.x;
     fish.mesh.position.y = fish.y;
+
+    return returnValue;
   }
 
   updateScore = (d) => {
@@ -294,7 +348,10 @@ export default class Game extends React.Component {
     if (nextProps.isRunning !== this.state.isRunning) {
       if (nextProps.isRunning) {
         let time = this.time();
-        this.fishes = [this.newfish(time), this.newfish(time), this.newfish(time)];
+        this.fishes = [];
+        this.addfish();
+        this.addfish();
+        this.addfish();
       } else {
         for (let i = 0; i < this.fishes.length; i++) {
           this.destroyfish(this.fishes[i]);
@@ -347,9 +404,12 @@ export default class Game extends React.Component {
     if (this.state.isRunning) {
       for (let i = this.fishes.length - 1; i >= 0; i--) {
         let fish = this.fishes[i];
-        this.fishTick(fish, dt, time, lineX, lineY);
-        if (this.lineHeight < 0.1 && fish.caught) {
-          this.updateScore(10);
+        let shouldDestroy = this.fishTick(fish, dt, time, lineX, lineY);
+        if (shouldDestroy) {
+          this.destroyfish(fish);
+          this.fishes.splice(i, 1);
+        } else if (this.lineHeight < 0.1 && fish.caught) {
+          this.updateScore(fish.points);
           this.destroyfish(fish);
           this.fishes.splice(i, 1);
         }
