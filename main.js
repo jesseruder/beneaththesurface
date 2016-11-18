@@ -1,7 +1,7 @@
 import Exponent from 'exponent';
 import React from 'react';
 import { Alert, PanResponder, View, TouchableHighlight, Text, TouchableWithoutFeedback,
-  StyleSheet, } from 'react-native';
+  StyleSheet, Dimensions } from 'react-native';
 
 import Assets from './Assets';
 // import Game from './3DGame';
@@ -13,6 +13,7 @@ import Game from './2DGame';
 // This is the root component of the app. It does any loading required
 // then renders `Game`.
 const GAME_TIME = 100;
+const BOMB_PRICE = 10;
 
 class App extends React.Component {
   state = {
@@ -23,11 +24,16 @@ class App extends React.Component {
     score: 0,
     timeRemaining: GAME_TIME,
     isRunning: false,
+    message: null,
+    messageColor: 'black',
+    messageSize: 22,
+    isPlacingBomb: false,
   }
 
   componentWillMount() {
     // THREE warns about unavailable WebGL extensions.
     console.disableYellowBox = true;
+    this.messageTimeout = null;
 
     this.load();
   }
@@ -125,12 +131,37 @@ class App extends React.Component {
     });
   }
 
+  _onBuyBomb = () => {
+    if (this.state.score < BOMB_PRICE) {
+      this.addMessage('Sorry, you need ' + BOMB_PRICE + ' points to buy a bomb.', {
+        size: 16,
+      });
+    } else {
+      this.setState({
+        score: this.state.score - BOMB_PRICE,
+        isPlacingBomb: true,
+      });
+
+      this.addMessage('Bought a bomb for ' + BOMB_PRICE + '! Touch to place it.', {
+        size: 16,
+        color: 'green',
+      });
+    }
+  }
+
+  _placedBomb = () => {
+    this.setState({
+      isPlacingBomb: false,
+    });
+  }
+
   render() {
     return this.state.loaded ? (
       <View style={{flex: 1}} >
-        <Game style={{ flex: 1 }} dx={this.state.dx} dy={this.state.dy} updateScore={this._updateScore} tick={this.tick} isRunning={this.state.isRunning} onGameLoaded={this.onGameLoaded}/>
+        <Game style={{ flex: 1 }} dx={this.state.dx} dy={this.state.dy} updateScore={this._updateScore} isPlacingBomb={this.state.isPlacingBomb} placedBomb={this._placedBomb} addMessage={this.addMessage} tick={this.tick} isRunning={this.state.isRunning} onGameLoaded={this.onGameLoaded}/>
         <Text style={styles.time}>Time: {this.state.timeRemaining}</Text>
-        <Text style={styles.score}>Score: {this.state.score}</Text>
+        <Text style={styles.score}>Points: {this.state.score}</Text>
+        {this._renderMessage()}
         {this._renderControls()}
         {this._renderNux()}
         {this._renderMainMenu()}
@@ -141,24 +172,52 @@ class App extends React.Component {
     );
   }
 
-  _renderControls() {
-    return null;
+  addMessage = (message, options = {}) => {
+    if (this.messageTimeout) {
+      clearTimeout(this.messageTimeout);
+    }
 
+    let defaultOptions = {
+      color: 'black',
+      time: 1000,
+      size: 22,
+    };
+    options = Object.assign(defaultOptions, options);
+
+    this.setState({
+      message,
+      messageColor: options.color,
+      messageSize: options.size,
+    });
+
+    this.messageTimeout = setTimeout(() => {
+      this.setState({
+        message: null,
+      });
+      this.messageTimeout = null;
+    }, options.time);
+  }
+
+  _renderMessage() {
+    if (!this.state.message) return null;
+
+    const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+    return (
+      <View style={{position: 'absolute', top: 50, left: 0, width: screenWidth, flex: 1, alignItems: 'center', justifyContent: 'center'}}>
+        <Text style={{fontWeight: 'bold', fontSize: this.state.messageSize, color: this.state.messageColor, height: 50}}>{this.state.message}</Text>
+      </View>
+    );
+  }
+
+  _renderControls() {
     if (!this.state.isRunning) return null;
+
+    if (this.state.isPlacingBomb || this.state.score < BOMB_PRICE) return null;
 
     return (
       <View>
-        <TouchableHighlight onPressIn={this._onPressLeft} onPressOut={this._onReleaseX} style={styles.leftButton} underlayColor="gray">
-          <Text style={styles.font}>LEFT</Text>
-        </TouchableHighlight>
-        <TouchableHighlight onPressIn={this._onPressRight} onPressOut={this._onReleaseX} style={styles.rightButton} underlayColor="gray">
-          <Text style={styles.font}>RIGHT</Text>
-        </TouchableHighlight>
-        <TouchableHighlight onPressIn={this._onPressIn} onPressOut={this._onReleaseY} style={styles.reelInButton} underlayColor="gray">
-          <Text style={styles.font}>IN</Text>
-        </TouchableHighlight>
-        <TouchableHighlight onPressIn={this._onPressOut} onPressOut={this._onReleaseY} style={styles.reelOutButton} underlayColor="gray">
-          <Text style={styles.font}>OUT</Text>
+        <TouchableHighlight onPress={this._onBuyBomb} style={styles.buyBombButton} underlayColor="gray">
+          <Text style={styles.font}>Buy Bomb</Text>
         </TouchableHighlight>
       </View>
     );
@@ -171,7 +230,7 @@ class App extends React.Component {
         <View style={{position: 'absolute', top: 0, left: 0, bottom: 0, right: 0, backgroundColor: 'rgba(135, 206, 250, 0.9)', flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'column'}}>
           <TouchableWithoutFeedback onPress={this._doneWithNux} >
             <View>
-              <Text style={styles.nuxText}>Reel in the fish to earn points before the time runs out! Touch a side of the screen to move in that direction and swipe up or down to reel in or out. Touch this to start!</Text>
+              <Text style={styles.nuxText}>Reel in the fish to earn points before the time runs out! Swipe left/right to move you boat and up/down to reel in/out. Touch this to start!</Text>
             </View>
           </TouchableWithoutFeedback>
         </View>
@@ -200,13 +259,10 @@ class App extends React.Component {
 }
 
 var styles = StyleSheet.create({
-  time: {fontWeight: 'bold', position: 'absolute', top: 30, left: 10},
-  score: {fontWeight: 'bold', position: 'absolute', top: 30, right: 10},
-  leftButton: {width: 50, height: 50, position: 'absolute', backgroundColor: '#cccccc', flex: 1, alignItems: 'center', justifyContent: 'center', bottom: 30, left: 10, borderRadius: 5},
-  rightButton: {width: 50, height: 50, position: 'absolute', backgroundColor: '#cccccc', flex: 1, alignItems: 'center', justifyContent: 'center', bottom: 30, right: 10, borderRadius: 5},
-  reelInButton: {width: 50, height: 50, position: 'absolute', backgroundColor: '#cccccc', flex: 1, alignItems: 'center', justifyContent: 'center', bottom: 90, left: 10, borderRadius: 5},
-  reelOutButton: {width: 50, height: 50, position: 'absolute', backgroundColor: '#cccccc', flex: 1, alignItems: 'center', justifyContent: 'center', bottom: 90, right: 10, borderRadius: 5},
-  font: {fontWeight: 'bold', fontSize: 14},
+  time: {fontSize: 16, position: 'absolute', top: 30, left: 10},
+  score: {fontSize: 16, position: 'absolute', top: 30, right: 10},
+  buyBombButton: {width: 80, height: 50, position: 'absolute', backgroundColor: '#113377', flex: 1, alignItems: 'center', justifyContent: 'center', bottom: 10, left: 10, borderRadius: 5},
+  font: {fontSize: 16, color: '#ffffff'},
   nuxText: {fontSize: 20, width: 300, textAlign: 'center'},
   mainMenuText: {fontSize: 20, width: 300, textAlign: 'center'},
 });

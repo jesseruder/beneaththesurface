@@ -67,6 +67,10 @@ const SHARK_EAT_DIST = 0.3;
 const MESH_ID_FISH = 'fish';
 const MESH_ID_SPECIAL_FISH = 'specialFish';
 const MESH_ID_SHARK = 'shark';
+const MESH_ID_BOMB = 'bomb';
+const MAX_BOMBS = 20;
+const BOMB_INITIAL_RADIUS = 0.1;
+const BOMB_RADIUS = 0.3;
 
 export default class Game extends React.Component {
   state = {
@@ -74,6 +78,14 @@ export default class Game extends React.Component {
     loaded: false,
     dx: 0,
     dy: 0,
+    isPlacingBomb: false,
+  }
+
+  screenToGLCoords = (x, y) => {
+    return {
+      x: (x / this.screenWidth) * this.width - this.width / 2.0,
+      y: (1.0 - (y / this.screenHeight)) * this.height - this.height / 2.0,
+    };
   }
 
   componentDidMount() {
@@ -94,6 +106,7 @@ export default class Game extends React.Component {
     this.width = 4;
     const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
     this.screenWidth = screenWidth;
+    this.screenHeight = screenHeight;
     this.height = (screenHeight / screenWidth) * this.width;
     this.camera = new THREE.OrthographicCamera(
       -this.width / 2, this.width / 2,
@@ -105,6 +118,9 @@ export default class Game extends React.Component {
     this.rightScreen = this.width/2;
     this.topScreen = this.height/2;
     this.bottomScreen = -this.height/2;
+
+    this.accumulateScore = 0;
+    this.accumulateScoreTimeout = null;
 
 
     //// Scene, sprites
@@ -249,6 +265,23 @@ export default class Game extends React.Component {
 
 
 
+    //// BOMB
+    this.bombGeometry = new THREE.PlaneBufferGeometry(0.2, 0.2);
+    this.bombTexture = THREEView.textureFromAsset(Assets['bomb']);
+    this.bombTexture.minFilter = this.bombTexture.magFilter = THREE.NearestFilter;
+    this.bombTexture.needsUpdate = true;
+    this.bombMaterial = new THREE.MeshBasicMaterial({
+      map: this.bombTexture,
+      transparent: true,  // Use the image's alpha channel for alpha.
+    });
+    this.meshPool[MESH_ID_BOMB] = [];
+    for (let i = 0; i < MAX_BOMBS + 2; i++) {
+      this.meshPool[MESH_ID_BOMB].push(new THREE.Mesh(this.bombGeometry, this.bombMaterial));
+    }
+    this.bombs = [];
+
+
+
     ////// PARTICLES
     this.particleSystem = new THREE.GPUParticleSystem({
 			maxParticles: 25000,
@@ -289,10 +322,27 @@ export default class Game extends React.Component {
 
     // These functions are called on touch and release of the view respectively.
     this.touch = (_, gesture) => {
-      this.setState({
-        dx: gesture.x0 > this.screenWidth / 2.0 ? 1.0 : -1.0,
-        dy: 0,
-      });
+      if (this.state.isPlacingBomb) {
+        this.props.placedBomb();
+        let coords = this.screenToGLCoords(gesture.x0, gesture.y0);
+        let bomb = {
+          isExploding: false,
+          x: coords.x,
+          y: coords.y,
+          mesh: this.meshPool[MESH_ID_BOMB].pop(),
+        };
+        this.bombs.push(bomb);
+        bomb.mesh.position.x = bomb.x;
+        bomb.mesh.position.y = bomb.y;
+        bomb.mesh.position.z = 40;
+        bomb.mesh.rotation.z = Math.PI;
+        this.scene.add(bomb.mesh);
+      } else {
+        this.setState({
+          dx: 0,
+          dy: 0,
+        });
+      }
     };
     this.release = (_, gesture) => {
       this.setState({
@@ -301,6 +351,13 @@ export default class Game extends React.Component {
       });
     }
     this.moveTouch = (_, gesture) => {
+      let dx = 0;
+      if (gesture.dx > 20) {
+        dx = 1;
+      } else if (gesture.dx < -20) {
+        dx = -1;
+      }
+
       let dy = 0;
       if (gesture.dy > 20) {
         dy = 1;
@@ -308,9 +365,7 @@ export default class Game extends React.Component {
         dy = -1;
       }
 
-      let dx = gesture.moveX > this.screenWidth / 2.0 ? 1.0 : -1.0;
-
-      if (dy !== this.state.dy || dx !== this.state.dx) {
+      if (dx !== this.state.dx || dy !== this.state.dy) {
         this.setState({
           dx,
           dy,
@@ -333,6 +388,10 @@ export default class Game extends React.Component {
     this.setState({
       loaded: true,
     });
+  }
+
+  addMessage = (message, options = {}) => {
+    this.props.addMessage(message, options);
   }
 
   randomHeightInWater = () => {
@@ -382,6 +441,7 @@ export default class Game extends React.Component {
       randomseed: Math.random(),
       size: 0.3,
       points: 10,
+      bombPoints: 0,
       tickFn: null,
       width: 1,
       height: 1,
@@ -406,6 +466,11 @@ export default class Game extends React.Component {
     this.meshPool[fish.meshId].push(fish.mesh);
   }
 
+  destroybomb = (bomb) => {
+    this.scene.remove(bomb.mesh);
+    this.meshPool[MESH_ID_BOMB].push(bomb.mesh);
+  }
+
   addfish = (time) => {
     if (Math.random() < 0.1) {
       this.addspecialfish(time);
@@ -418,6 +483,7 @@ export default class Game extends React.Component {
     let fish = this.newfish(time, {
       speed: 1.0,
       points: 40,
+      bombPoints: -10,
       yBeforeTransformation: this.randomHeightInWaterPercent(0.6),
       yTravel: Math.random() * 0.8 + 0.1,
       tickFn: (fish, dt, time) => {
@@ -442,6 +508,7 @@ export default class Game extends React.Component {
       isShark: true,
       canBeEaten: false,
       points: -30,
+      bombPoints: 20,
       width: 2.45,
       hitbox: 0.3,
       tickFn: (fish, dt, time) => {
@@ -507,6 +574,14 @@ export default class Game extends React.Component {
     fish.mesh.position.x = fish.x;
     fish.mesh.position.y = fish.y;
 
+    for (let i = 0; i < this.bombs.length; i++) {
+      let bomb = this.bombs[i];
+      let dist = Math.sqrt(Math.pow(bomb.x - fish.x, 2) + Math.pow(bomb.y - fish.y, 2));
+      if (dist < fish.hitbox + BOMB_INITIAL_RADIUS) {
+        bomb.isExploding = true;
+      }
+    }
+
     return returnValue;
   }
 
@@ -526,6 +601,16 @@ export default class Game extends React.Component {
   }
 
   updateScore = (d) => {
+    this.accumulateScore += d;
+    this.accumulateScoreTimeout = setTimeout(() => {
+      if (this.accumulateScore > 0) {
+        this.addMessage('+' + this.accumulateScore + '!', {color: 'green'});
+      } else if (this.accumulateScore < 0) {
+        this.addMessage(this.accumulateScore + '!', {color: 'red'});
+      }
+      this.accumulateScore = 0;
+      this.accumulateScoreTimeout = null;
+    }, 50);
     this.props.updateScore(d);
   }
 
@@ -536,6 +621,12 @@ export default class Game extends React.Component {
         dy: nextProps.dy,
       })
     }*/
+
+    if (nextProps.isPlacingBomb !== this.state.isPlacingBomb) {
+      this.setState({
+        isPlacingBomb: nextProps.isPlacingBomb,
+      });
+    }
 
     if (nextProps.isRunning !== this.state.isRunning) {
       if (nextProps.isRunning) {
@@ -549,6 +640,11 @@ export default class Game extends React.Component {
           this.destroyfish(this.fishes[i]);
         }
         this.fishes = [];
+
+        for (let i = 0; i < this.bombs.length; i++) {
+          this.destroybomb(this.bombs[i]);
+        }
+        this.bombs = [];
       }
 
       this.setState({
@@ -620,6 +716,26 @@ export default class Game extends React.Component {
       if (numSharks < MAX_SHARKS && numFishes > 2 && Math.random() < dt / 10.0) {
         this.addshark(time);
       }
+
+      for (let i = this.bombs.length - 1; i >= 0; i--) {
+        let bomb = this.bombs[i];
+        if (bomb.isExploding) {
+          this.destroybomb(bomb);
+          this.bombs.splice(i, 1);
+          this.addExplosion(bomb.x, bomb.y, 2.3);
+
+          for (let j = this.fishes.length - 1; j >= 0; j--) {
+            let fish = this.fishes[j];
+            let dist = Math.sqrt(Math.pow(bomb.x - fish.x, 2) + Math.pow(bomb.y - fish.y, 2));
+            if (dist < fish.hitbox + BOMB_RADIUS) {
+              this.updateScore(fish.bombPoints);
+              this.destroyfish(fish);
+              this.fishes.splice(j, 1);
+              this.addExplosion(fish.x, fish.y);
+            }
+          }
+        }
+      }
     }
 
 
@@ -631,13 +747,13 @@ export default class Game extends React.Component {
 		if (particleDelta > 0) {
       for (let i = this.explosions.length - 1; i >= 0; i--) {
         let explosion = this.explosions[i];
-  			this.particleOptions.position.x = explosion.x + Math.sin(this.particleTick * this.particleSpawnerOptions.horizontalSpeed) * .3;
-  			this.particleOptions.position.y = explosion.y + Math.sin(this.particleTick * this.particleSpawnerOptions.verticalSpeed) * .3;
+  			this.particleOptions.position.x = explosion.x + Math.sin(this.particleTick * this.particleSpawnerOptions.horizontalSpeed) * .3 * explosion.size;
+  			this.particleOptions.position.y = explosion.y + Math.sin(this.particleTick * this.particleSpawnerOptions.verticalSpeed) * .3 * explosion.size;
   			this.particleOptions.position.z = 50;
-  			for (var x = 0; x < this.particleSpawnerOptions.spawnRate * particleDelta; x++) {
+  			for (var x = 0; x < this.particleSpawnerOptions.spawnRate * particleDelta * explosion.size; x++) {
           let angle = Math.random() * Math.PI * 2;
-          this.particleOptions.velocity.x = Math.cos(angle) * 0.3;
-          this.particleOptions.velocity.y = Math.sin(angle) * 0.3;
+          this.particleOptions.velocity.x = Math.cos(angle) * 0.3 * explosion.size;
+          this.particleOptions.velocity.y = Math.sin(angle) * 0.3 * explosion.size;
   				this.particleSystem.spawnParticle(this.particleOptions);
   			}
 

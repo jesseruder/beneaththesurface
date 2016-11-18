@@ -13,6 +13,7 @@ const modules = {
   'particle2': require('./particle2.png'),
   'water': require('./water.png'),
   'cloud': require('./cloud.png'),
+  'bomb': require('./bomb.png'),
 }
 
 // Export map of asset names to `Exponent.Asset` objects.
