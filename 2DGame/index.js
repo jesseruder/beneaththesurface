@@ -202,7 +202,7 @@ export default class Game extends React.Component {
     this.boatx = 0.5;
     this.boatMesh = new THREE.Mesh(this.boatGeometry, this.boatMaterial);
     this.boatMesh.position.x = this.boatMesh.position.y = 0.5;
-    this.boatMesh.position.z = 20;     // This puts this sprite behind our previous one.
+    this.boatMesh.position.z = 100;
     this.boatMesh.rotation.z = Math.PI;
     this.scene.add(this.boatMesh);
 
@@ -218,6 +218,23 @@ export default class Game extends React.Component {
     this.lineMesh.position.y = 0.5;
     this.lineMesh.position.z = 10;
     this.scene.add(this.lineMesh);
+
+
+    //////// HOOK
+    this.hookHeight = 0.24;
+    this.hookGeometry = new THREE.PlaneBufferGeometry(0.1, this.hookHeight);
+    this.hookTexture = THREEView.textureFromAsset(Assets['hook']);
+    this.hookTexture.minFilter = this.hookTexture.magFilter = THREE.NearestFilter;
+    this.hookTexture.needsUpdate = true;
+    this.hookMaterial = new THREE.MeshBasicMaterial({
+      map: this.hookTexture,
+      transparent: true,  // Use the image's alpha channel for alpha.
+    });
+    this.hookMesh = new THREE.Mesh(this.hookGeometry, this.hookMaterial);
+    this.hookMesh.position.x = -1000;
+    this.hookMesh.position.z = 11;
+    this.hookMesh.rotation.z = Math.PI;
+    this.scene.add(this.hookMesh);
 
 
     //////// FISH
@@ -677,17 +694,23 @@ export default class Game extends React.Component {
     this.boatMesh.position.x = this.boatx;
     this.lineMesh.position.x = this.boatx;
 
-    this.lineMesh.scale.y = this.lineHeight; // can't be 0
+    this.lineMesh.scale.y = this.lineHeight - this.hookHeight/2.0; // can't be 0
 
     let time = this.time();
     this.waterMaterial.uniforms[ 'time' ].value = time;
     let topOfWaterY = getDisplacement(this.boatMesh.position.x, time) + this.fixedTopOfWaterY;
     this.boatMesh.position.y = topOfWaterY + boatheight / 2.0 - 0.05;//0.1
-    this.lineMesh.position.y = topOfWaterY - this.lineHeight/2.0;
+    this.lineMesh.position.y = topOfWaterY - this.lineHeight/2.0 + this.hookHeight/2.0;
     this.boatMesh.rotation.z = Math.PI + Math.atan2(getDisplacement(this.boatMesh.position.x + boatwidth/2.0, time) - getDisplacement(this.boatMesh.position.x -+ boatwidth/2.0, time), boatwidth);
 
     let lineX = this.boatx;
     let lineY = topOfWaterY - this.lineHeight;
+
+    this.hookMesh.position.x = lineX;
+    this.hookMesh.position.y = lineY + this.hookHeight/2.0;
+    if (this.hookMesh.position.y > topOfWaterY) {
+      this.hookMesh.position.y = topOfWaterY;
+    }
 
     if (this.state.isRunning) {
       for (let i = this.fishes.length - 1; i >= 0; i--) {
