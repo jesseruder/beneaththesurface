@@ -12,6 +12,7 @@ const THREE = require('three');
 const THREEView = Exponent.createTHREEViewClass(THREE);
 
 import Assets from '../Assets';
+require('./GPUParticleSystem');
 
 
 //// Game
@@ -37,7 +38,7 @@ const waterFragShader = `
 varying vec2 vUv;
 
 void main() {
-    gl_FragColor = vec4( 0.0,0.0,1.0, 1.0 );
+    gl_FragColor = vec4( 0.0,0.0,0.5*vUv.y, 1.0 );
 
 }`;
 
@@ -54,7 +55,7 @@ const boatwidth = 0.5;
 const boatheight = 0.5;
 const MAX_FISHES = 8;
 const MAX_SHARKS = 2;
-const SHARK_EAT_DIST = 0.2;
+const SHARK_EAT_DIST = 0.3;
 const MESH_ID_FISH = 'fish';
 const MESH_ID_SPECIAL_FISH = 'specialFish';
 const MESH_ID_SHARK = 'shark';
@@ -199,6 +200,39 @@ export default class Game extends React.Component {
 
 
 
+    ////// PARTICLES
+    this.particleSystem = new THREE.GPUParticleSystem({
+			maxParticles: 250000,
+      particleNoiseTex: THREEView.textureFromAsset(Assets['perlin-512']),
+      particleSpriteTex: THREEView.textureFromAsset(Assets['particle2']),
+		});
+    // not working :/
+    this.particleSystem.renderOrder = 100;
+    this.particleSystem.depthTest = false;
+    this.scene.add(this.particleSystem);
+    this.particleOptions = {
+      position: new THREE.Vector3(),
+			positionRandomness: .1,
+			velocity: new THREE.Vector3(),
+			velocityRandomness: .1,
+			color: 0xFF8800,
+			colorRandomness: .2,
+			turbulence: .001,
+			lifetime: 0.2,
+			size: 200,
+			sizeRandomness: 100,
+		};
+		this.particleSpawnerOptions = {
+			spawnRate: 350,
+			horizontalSpeed: 0.001,
+			verticalSpeed: 0.001,
+			timeScale: 1
+		};
+    this.particleTick = 0;
+    this.explosions = [];
+
+
+
     //// Events
 
     // This function is called every frame, with `dt` being the time in seconds
@@ -278,6 +312,7 @@ export default class Game extends React.Component {
       tickFn: null,
       width: 1,
       height: 1,
+      hitbox: 0.1,
     };
     if (options) {
       fish = Object.assign(fish, options);
@@ -286,8 +321,10 @@ export default class Game extends React.Component {
     fish.mesh.scale.y = fish.size * fish.height;
     fish.mesh.position.y = 10000;
     fish.mesh.position.z = 30;
+    //fish.mesh.renderOrder = 1;
     this.rotatefish(fish, time);
     this.scene.add(fish.mesh);
+    this.putParticleSystemInFront();
     return fish;
   }
 
@@ -333,6 +370,7 @@ export default class Game extends React.Component {
       canBeEaten: false,
       points: -30,
       width: 2.45,
+      hitbox: 0.3,
       tickFn: (fish, dt, time) => {
         for (let i = this.fishes.length - 1; i >= 0; i--) {
           let otherfish = this.fishes[i];
@@ -384,8 +422,9 @@ export default class Game extends React.Component {
       }
 
       let dist = Math.sqrt(Math.pow(lineX - fish.x, 2) + Math.pow(lineY - fish.y, 2));
-      if (dist < 0.1) {
+      if (dist < fish.hitbox) {
         fish.caught = true;
+        this.addExplosion(lineX, lineY);
       }
     }
 
@@ -396,6 +435,21 @@ export default class Game extends React.Component {
     fish.mesh.position.y = fish.y;
 
     return returnValue;
+  }
+
+  addExplosion = (x, y, size = 1) => {
+    this.explosions.push({
+      x,
+      y,
+      size,
+      endTime: Date.now() + 200,
+    });
+  }
+
+  putParticleSystemInFront = () => {
+    // not working :/
+    //this.scene.remove(this.particleSystem);
+    //this.scene.add(this.particleSystem);
   }
 
   updateScore = (d) => {
@@ -494,6 +548,33 @@ export default class Game extends React.Component {
         this.addshark(time);
       }
     }
+
+
+
+    // PARTICLES
+    let particleDelta = dt * this.particleSpawnerOptions.timeScale;
+    this.particleTick += particleDelta;
+		if (this.particleTick < 0) this.particleTick = 0;
+		if (particleDelta > 0) {
+      for (let i = this.explosions.length - 1; i >= 0; i--) {
+        let explosion = this.explosions[i];
+  			this.particleOptions.position.x = explosion.x + Math.sin(this.particleTick * this.particleSpawnerOptions.horizontalSpeed) * .3;
+  			this.particleOptions.position.y = explosion.y + Math.sin(this.particleTick * this.particleSpawnerOptions.verticalSpeed) * .3;
+  			this.particleOptions.position.z = 50;
+  			for (var x = 0; x < this.particleSpawnerOptions.spawnRate * particleDelta; x++) {
+          let angle = Math.random() * Math.PI * 2;
+          this.particleOptions.velocity.x = Math.cos(angle) * 0.3;
+          this.particleOptions.velocity.y = Math.sin(angle) * 0.3;
+  				this.particleSystem.spawnParticle(this.particleOptions);
+  			}
+
+        if (Date.now() > explosion.endTime) {
+          this.explosions.splice(i, 1);
+        }
+      }
+		}
+    this.particleSystem.update(this.particleTick);
+
 
     this.props.tick();
     this.props.onGameLoaded();

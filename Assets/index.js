@@ -9,6 +9,8 @@ const modules = {
   'boat': require('./boatsmall.png'),
   'goodfish': require('./goodfish.png'),
   'shark': require('./smallshark.png'),
+  'perlin-512': require('./perlin-512.png'),
+  'particle2': require('./particle2.png'),
 }
 
 // Export map of asset names to `Exponent.Asset` objects.
