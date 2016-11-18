@@ -62,6 +62,7 @@ const boatwidth = 0.5;
 const boatheight = 0.5;
 const MAX_FISHES = 8;
 const MAX_SHARKS = 2;
+const MAX_CLOUDS = 5;
 const SHARK_EAT_DIST = 0.3;
 const MESH_ID_FISH = 'fish';
 const MESH_ID_SPECIAL_FISH = 'specialFish';
@@ -111,6 +112,39 @@ export default class Game extends React.Component {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color( 0x87CEFA );
 
+
+    this.meshPool = {};
+
+
+    /////// CLOUDS
+    this.cloudGeometry = new THREE.PlaneBufferGeometry(1, 0.579);
+    this.cloudTexture = THREEView.textureFromAsset(Assets['cloud']);
+    this.cloudTexture.minFilter = this.cloudTexture.magFilter = THREE.NearestFilter;
+    this.cloudTexture.needsUpdate = true;
+    this.cloudMaterial = new THREE.MeshBasicMaterial({
+      map: this.cloudTexture,
+      transparent: true,
+    });
+    this.clouds = [];
+    for (let i = 0; i < MAX_CLOUDS; i++) {
+      let mesh = new THREE.Mesh(this.cloudGeometry, this.cloudMaterial);
+      let cloud = {
+        mesh,
+        x: Math.random() * this.width * 2 - this.width * 1.5,
+        y: this.topScreen - Math.random() * this.height * 0.3,
+        speed: Math.random() * 0.1 + 0.1,
+      };
+      this.clouds.push(cloud);
+      mesh.position.x = cloud.x;
+      mesh.position.y = cloud.y;
+      mesh.position.z = 0.5;
+      mesh.scale.x = Math.random() * 0.3 + 0.6;
+      mesh.scale.y = Math.random() * 0.3 + 0.6;
+      mesh.rotation.z = Math.PI;
+      this.scene.add(mesh);
+    }
+
+
     /////// WATER
     this.waterGeometry = new THREE.PlaneBufferGeometry(4, waterheight, 100);
     this.waterTexture = THREEView.textureFromAsset(Assets['water']);
@@ -133,6 +167,7 @@ export default class Game extends React.Component {
     this.waterMesh = new THREE.Mesh(this.waterGeometry, this.waterMaterial);
     this.fixedTopOfWaterY = this.height * waterpercentage + this.bottomScreen;
     this.waterMesh.position.y = this.fixedTopOfWaterY - waterheight/2.0;
+    this.waterMesh.position.z = 1.0;
     this.scene.add(this.waterMesh);
 
 
@@ -178,7 +213,6 @@ export default class Game extends React.Component {
       transparent: true,  // Use the image's alpha channel for alpha.
     });
     this.fishMaterial.side = THREE.DoubleSide;
-    this.meshPool = {};
     this.meshPool[MESH_ID_FISH] = [];
     for (let i = 0; i < MAX_FISHES + 2; i++) {
       this.meshPool[MESH_ID_FISH].push(new THREE.Mesh(this.fishGeometry, this.fishMaterial));
@@ -216,7 +250,7 @@ export default class Game extends React.Component {
 
     ////// PARTICLES
     this.particleSystem = new THREE.GPUParticleSystem({
-			maxParticles: 250000,
+			maxParticles: 25000,
       particleNoiseTex: THREEView.textureFromAsset(Assets['perlin-512']),
       particleSpriteTex: THREEView.textureFromAsset(Assets['particle2']),
 		});
@@ -588,6 +622,18 @@ export default class Game extends React.Component {
       }
 		}
     this.particleSystem.update(this.particleTick);
+
+
+
+    /// CLOUDS
+    for (let i = 0; i < this.clouds.length; i++) {
+      let cloud = this.clouds[i];
+      cloud.x += dt * cloud.speed;
+      cloud.mesh.position.x = cloud.x;
+      if (cloud.x > this.width * 1.5) {
+        cloud.x = -this.width * 1.5;
+      }
+    }
 
 
     this.props.tick();
