@@ -71,6 +71,7 @@ const MESH_ID_BOMB = 'bomb';
 const MAX_BOMBS = 20;
 const BOMB_INITIAL_RADIUS = 0.1;
 const BOMB_RADIUS = 0.3;
+const MAX_LINE_HEIGHT = 2.0;
 
 export default class Game extends React.Component {
   state = {
@@ -209,6 +210,8 @@ export default class Game extends React.Component {
 
 
     ////////// FISHING LINE
+    this.lastAngle = Math.PI/2.0;
+    this.angularMomentum = 0;
     this.lineHeight = 1.0;
     this.lineGeometry = new THREE.PlaneBufferGeometry(0.02, 1.0);
     this.lineMaterial = new THREE.MeshBasicMaterial({
@@ -686,13 +689,12 @@ export default class Game extends React.Component {
       this.lineHeight += dt * this.state.dy;
       if (this.lineHeight < 0.01) {
         this.lineHeight = 0.01;
-      } else if (this.lineHeight > 2.0) {
-        this.lineHeight = 2.0;
+      } else if (this.lineHeight > MAX_LINE_HEIGHT) {
+        this.lineHeight = MAX_LINE_HEIGHT;
       }
     }
 
     this.boatMesh.position.x = this.boatx;
-    this.lineMesh.position.x = this.boatx;
 
     this.lineMesh.scale.y = this.lineHeight - this.hookHeight/2.0; // can't be 0
 
@@ -700,16 +702,29 @@ export default class Game extends React.Component {
     this.waterMaterial.uniforms[ 'time' ].value = time;
     let topOfWaterY = getDisplacement(this.boatMesh.position.x, time) + this.fixedTopOfWaterY;
     this.boatMesh.position.y = topOfWaterY + boatheight / 2.0 - 0.05;//0.1
-    this.lineMesh.position.y = topOfWaterY - this.lineHeight/2.0 + this.hookHeight/2.0;
     this.boatMesh.rotation.z = Math.PI + Math.atan2(getDisplacement(this.boatMesh.position.x + boatwidth/2.0, time) - getDisplacement(this.boatMesh.position.x -+ boatwidth/2.0, time), boatwidth);
 
-    let lineX = this.boatx;
-    let lineY = topOfWaterY - this.lineHeight;
+    // FISHING LINE PHYSICS
+    let forceDown = 4.0;
+    let forceHorizontal = -this.state.dx * 2.0;
+    let forceUp = -this.lineHeight;
+    let forceVertical = forceDown - forceUp;
+    let targetAngle = Math.atan2(forceVertical, forceHorizontal);
+    let diffAngle = targetAngle - this.lastAngle;
+    this.angularMomentum += diffAngle * dt * 0.6;
+    this.angularMomentum -= this.angularMomentum * dt * (0.1 + (2.0 - MAX_LINE_HEIGHT) / 6.0); // dampening
+    this.lastAngle += this.angularMomentum * dt * 2.0;
+    let lineX = this.boatx + (Math.cos(this.lastAngle) * this.lineHeight);
+    let lineY = topOfWaterY - (Math.sin(this.lastAngle) * this.lineHeight);
+
+    this.lineMesh.rotation.z = Math.PI/2.0 - this.lastAngle;
+    this.lineMesh.position.x = (this.boatx) + Math.cos(this.lastAngle) * this.lineMesh.scale.y * 0.5;
+    this.lineMesh.position.y = (topOfWaterY - this.lineHeight/2.0 + this.hookHeight/2.0) + Math.sin(this.lastAngle) * this.lineMesh.scale.y * 0.5 * 0.02;
 
     this.hookMesh.position.x = lineX;
     this.hookMesh.position.y = lineY + this.hookHeight/2.0;
     if (this.hookMesh.position.y > topOfWaterY) {
-      this.hookMesh.position.y = topOfWaterY;
+      //this.hookMesh.position.y = topOfWaterY;
     }
 
     if (this.state.isRunning) {
