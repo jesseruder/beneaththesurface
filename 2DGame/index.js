@@ -317,12 +317,12 @@ export default class Game extends React.Component {
 			color: 0xFF8800,
 			colorRandomness: .2,
 			turbulence: .001,
-			lifetime: 0.2,
+			lifetime: 0.3,
 			size: 300,
 			sizeRandomness: 100,
 		};
 		this.particleSpawnerOptions = {
-			spawnRate: 350,
+			spawnRate: 500,
 			horizontalSpeed: 0.001,
 			verticalSpeed: 0.001,
 			timeScale: 1
@@ -745,7 +745,7 @@ export default class Game extends React.Component {
         if (bomb.isExploding) {
           this.destroybomb(bomb);
           this.bombs.splice(i, 1);
-          this.addExplosion(bomb.x, bomb.y, 2.3);
+          this.addExplosion(bomb.x, bomb.y, 3);
 
           for (let j = this.fishes.length - 1; j >= 0; j--) {
             let fish = this.fishes[j];
