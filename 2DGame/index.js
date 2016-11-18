@@ -53,8 +53,11 @@ const waterheight = 4;
 const boatwidth = 0.5;
 const boatheight = 0.5;
 const MAX_FISHES = 8;
+const MAX_SHARKS = 2;
+const SHARK_EAT_DIST = 0.2;
 const MESH_ID_FISH = 'fish';
 const MESH_ID_SPECIAL_FISH = 'specialFish';
+const MESH_ID_SHARK = 'shark';
 
 export default class Game extends React.Component {
   state = {
@@ -146,6 +149,7 @@ export default class Game extends React.Component {
     });
     this.lineMesh = new THREE.Mesh(this.lineGeometry, this.lineMaterial);
     this.lineMesh.position.y = 0.5;
+    this.lineMesh.position.z = 10;
     this.scene.add(this.lineMesh);
 
 
@@ -166,7 +170,7 @@ export default class Game extends React.Component {
     }
 
 
-
+    ///// SPECIAL FISH
     this.specialFishMaterial = new THREE.MeshBasicMaterial({
       map: this.fishTexture,
       color: 0x990000,
@@ -176,6 +180,21 @@ export default class Game extends React.Component {
     this.meshPool[MESH_ID_SPECIAL_FISH] = [];
     for (let i = 0; i < MAX_FISHES + 2; i++) {
       this.meshPool[MESH_ID_SPECIAL_FISH].push(new THREE.Mesh(this.fishGeometry, this.specialFishMaterial));
+    }
+
+
+    //// SHARK!!!!!!
+    this.sharkTexture = THREEView.textureFromAsset(Assets['shark']);
+    this.sharkTexture.minFilter = this.sharkTexture.magFilter = THREE.NearestFilter;
+    this.sharkTexture.needsUpdate = true;
+    this.sharkMaterial = new THREE.MeshBasicMaterial({
+      map: this.sharkTexture,
+      transparent: true,  // Use the image's alpha channel for alpha.
+    });
+    this.sharkMaterial.side = THREE.DoubleSide;
+    this.meshPool[MESH_ID_SHARK] = [];
+    for (let i = 0; i < MAX_SHARKS + 2; i++) {
+      this.meshPool[MESH_ID_SHARK].push(new THREE.Mesh(this.fishGeometry, this.sharkMaterial));
     }
 
 
@@ -236,13 +255,15 @@ export default class Game extends React.Component {
 
   newfish = (time, options, meshFn) => {
     let meshObj = meshFn ? meshFn() : {
-      mesh: this.meshPool.fish.pop(),
+      mesh: this.meshPool[MESH_ID_FISH].pop(),
       meshId: MESH_ID_FISH,
     };
 
     let dx = Math.random() > 0.5 ? 1.0 : -1.0;
     let fish = {
+      isFish: true,
       caught: false,
+      canBeEaten: true,
       speed: 0.3,
       mesh: meshObj.mesh,
       meshId: meshObj.meshId,
@@ -255,13 +276,16 @@ export default class Game extends React.Component {
       size: 0.3,
       points: 10,
       tickFn: null,
+      width: 1,
+      height: 1,
     };
     if (options) {
       fish = Object.assign(fish, options);
     }
-    fish.mesh.scale.x = fish.size;
-    fish.mesh.scale.y = fish.size;
+    fish.mesh.scale.x = fish.size * fish.width;
+    fish.mesh.scale.y = fish.size * fish.height;
     fish.mesh.position.y = 10000;
+    fish.mesh.position.z = 30;
     this.rotatefish(fish, time);
     this.scene.add(fish.mesh);
     return fish;
@@ -295,8 +319,35 @@ export default class Game extends React.Component {
       },
     }, () => {
       return {
-        mesh: new THREE.Mesh(this.fishGeometry, this.specialFishMaterial),
+        mesh: this.meshPool[MESH_ID_SPECIAL_FISH].pop(),
         meshId: MESH_ID_SPECIAL_FISH,
+      };
+    });
+    this.fishes.push(fish);
+  }
+
+  addshark = (time) => {
+    let fish = this.newfish(time, {
+      isFish: false,
+      isShark: true,
+      canBeEaten: false,
+      points: -30,
+      width: 2.45,
+      tickFn: (fish, dt, time) => {
+        for (let i = this.fishes.length - 1; i >= 0; i--) {
+          let otherfish = this.fishes[i];
+          if (otherfish.canBeEaten) {
+            let dist = Math.sqrt(Math.pow(fish.x - otherfish.x, 2) + Math.pow(fish.y - otherfish.y, 2));
+            if (dist < SHARK_EAT_DIST) {
+              otherfish.shouldDestroy = true;
+            }
+          }
+        }
+      },
+    }, () => {
+      return {
+        mesh: this.meshPool[MESH_ID_SHARK].pop(),
+        meshId: MESH_ID_SHARK,
       };
     });
     this.fishes.push(fish);
@@ -335,11 +386,12 @@ export default class Game extends React.Component {
       let dist = Math.sqrt(Math.pow(lineX - fish.x, 2) + Math.pow(lineY - fish.y, 2));
       if (dist < 0.1) {
         fish.caught = true;
-      } else if (fish.tickFn) {
-        returnValue = fish.tickFn(fish, dt, time);
       }
     }
 
+    if (fish.tickFn) {
+      returnValue = fish.tickFn(fish, dt, time);
+    }
     fish.mesh.position.x = fish.x;
     fish.mesh.position.y = fish.y;
 
@@ -417,7 +469,7 @@ export default class Game extends React.Component {
     if (this.state.isRunning) {
       for (let i = this.fishes.length - 1; i >= 0; i--) {
         let fish = this.fishes[i];
-        let shouldDestroy = this.fishTick(fish, dt, time, lineX, lineY);
+        let shouldDestroy = this.fishTick(fish, dt, time, lineX, lineY) || fish.shouldDestroy;
         if (shouldDestroy) {
           this.destroyfish(fish);
           this.fishes.splice(i, 1);
@@ -428,17 +480,33 @@ export default class Game extends React.Component {
         }
       }
 
-      if (this.fishes.length < MAX_FISHES && Math.random() < dt / 7.0) {
+      let numFishes = this.countFishesWithFn((fish) => fish.isFish);
+      if (numFishes < MAX_FISHES && Math.random() < dt / 5.0) {
         this.addfish(time);
       }
 
-      if (this.fishes.length === 0) {
+      if (numFishes === 0) {
         this.addfish(time);
+      }
+
+      let numSharks = this.countFishesWithFn((fish) => fish.isShark);
+      if (numSharks < MAX_SHARKS && numFishes > 2 && Math.random() < dt / 10.0) {
+        this.addshark(time);
       }
     }
 
     this.props.tick();
     this.props.onGameLoaded();
+  }
+
+  countFishesWithFn(fn) {
+    let count = 0;
+    for (let i = 0; i < this.fishes.length; i++) {
+      if (fn(this.fishes[i])) {
+        count++;
+      }
+    }
+    return count;
   }
 
   render() {

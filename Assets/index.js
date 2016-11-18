@@ -8,6 +8,7 @@ import Exponent from 'exponent';
 const modules = {
   'boat': require('./boatsmall.png'),
   'goodfish': require('./goodfish.png'),
+  'shark': require('./smallshark.png'),
 }
 
 // Export map of asset names to `Exponent.Asset` objects.
