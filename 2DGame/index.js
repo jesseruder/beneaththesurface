@@ -53,6 +53,8 @@ const waterheight = 4;
 const boatwidth = 0.5;
 const boatheight = 0.5;
 const MAX_FISHES = 8;
+const MESH_ID_FISH = 'fish';
+const MESH_ID_SPECIAL_FISH = 'specialFish';
 
 export default class Game extends React.Component {
   state = {
@@ -157,9 +159,10 @@ export default class Game extends React.Component {
       transparent: true,  // Use the image's alpha channel for alpha.
     });
     this.fishMaterial.side = THREE.DoubleSide;
-    this.fishMeshPool = [];
+    this.meshPool = {};
+    this.meshPool[MESH_ID_FISH] = [];
     for (let i = 0; i < MAX_FISHES + 2; i++) {
-      this.fishMeshPool.push(new THREE.Mesh(this.fishGeometry, this.fishMaterial));
+      this.meshPool[MESH_ID_FISH].push(new THREE.Mesh(this.fishGeometry, this.fishMaterial));
     }
 
 
@@ -170,6 +173,10 @@ export default class Game extends React.Component {
       transparent: true,  // Use the image's alpha channel for alpha.
     });
     this.specialFishMaterial.side = THREE.DoubleSide;
+    this.meshPool[MESH_ID_SPECIAL_FISH] = [];
+    for (let i = 0; i < MAX_FISHES + 2; i++) {
+      this.meshPool[MESH_ID_SPECIAL_FISH].push(new THREE.Mesh(this.fishGeometry, this.specialFishMaterial));
+    }
 
 
 
@@ -228,12 +235,17 @@ export default class Game extends React.Component {
   }
 
   newfish = (time, options, meshFn) => {
+    let meshObj = meshFn ? meshFn() : {
+      mesh: this.meshPool.fish.pop(),
+      meshId: MESH_ID_FISH,
+    };
+
     let dx = Math.random() > 0.5 ? 1.0 : -1.0;
     let fish = {
       caught: false,
       speed: 0.3,
-      mesh: meshFn ? meshFn() : this.fishMeshPool.pop(),
-      shouldReturnMesh: !meshFn,
+      mesh: meshObj.mesh,
+      meshId: meshObj.meshId,
       dx,
       x: dx > 0 ? this.leftScreen - 0.1 : this.rightScreen + 0.1,
       y: 10000, // this will get set later
@@ -257,13 +269,11 @@ export default class Game extends React.Component {
 
   destroyfish = (fish) => {
     this.scene.remove(fish.mesh);
-    if (fish.shouldReturnMesh) {
-      this.fishMeshPool.push(fish.mesh);
-    }
+    this.meshPool[fish.meshId].push(fish.mesh);
   }
 
   addfish = (time) => {
-    if (Math.random() < 0.05) {
+    if (Math.random() < 0.1) {
       this.addspecialfish(time);
     } else {
       this.fishes.push(this.newfish(time));
@@ -284,7 +294,10 @@ export default class Game extends React.Component {
         return false;
       },
     }, () => {
-      return new THREE.Mesh(this.fishGeometry, this.specialFishMaterial);
+      return {
+        mesh: new THREE.Mesh(this.fishGeometry, this.specialFishMaterial),
+        meshId: MESH_ID_SPECIAL_FISH,
+      };
     });
     this.fishes.push(fish);
   }
