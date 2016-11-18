@@ -93,6 +93,7 @@ export default class Game extends React.Component {
     // on the phone screen's aspect ratio.
     this.width = 4;
     const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+    this.screenWidth = screenWidth;
     this.height = (screenHeight / screenWidth) * this.width;
     this.camera = new THREE.OrthographicCamera(
       -this.width / 2, this.width / 2,
@@ -288,11 +289,34 @@ export default class Game extends React.Component {
 
     // These functions are called on touch and release of the view respectively.
     this.touch = (_, gesture) => {
-      //material.color.setHex(0x00ff00);
+      this.setState({
+        dx: gesture.x0 > this.screenWidth / 2.0 ? 1.0 : -1.0,
+        dy: 0,
+      });
     };
     this.release = (_, gesture) => {
-      //material.color.setHex(0xff0000);
+      this.setState({
+        dx: 0,
+        dy: 0,
+      });
     }
+    this.moveTouch = (_, gesture) => {
+      let dy = 0;
+      if (gesture.dy > 20) {
+        dy = 1;
+      } else if (gesture.dy < -20) {
+        dy = -1;
+      }
+
+      let dx = gesture.moveX > this.screenWidth / 2.0 ? 1.0 : -1.0;
+
+      if (dy !== this.state.dy || dx !== this.state.dx) {
+        this.setState({
+          dx,
+          dy,
+        });
+      }
+    };
 
     // We bind our `touch` and `release` callbacks using a `PanResponder`. The
     // `THREEView` takes our `scene` and `camera` and renders them every frame.
@@ -302,6 +326,7 @@ export default class Game extends React.Component {
       onPanResponderGrant: this.touch,
       onPanResponderRelease: this.release,
       onPanResponderTerminate: this.release,
+      onPanResponderMove: this.moveTouch,
       onShouldBlockNativeResponder: () => false,
     });
 
@@ -505,12 +530,12 @@ export default class Game extends React.Component {
   }
 
   componentWillReceiveProps(nextProps) {
-    if (nextProps.dx !== this.state.dx || nextProps.dy !== this.state.dy) {
+    /*if (nextProps.dx !== this.state.dx || nextProps.dy !== this.state.dy) {
       this.setState({
         dx: nextProps.dx,
         dy: nextProps.dy,
       })
-    }
+    }*/
 
     if (nextProps.isRunning !== this.state.isRunning) {
       if (nextProps.isRunning) {

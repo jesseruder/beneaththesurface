@@ -142,6 +142,8 @@ class App extends React.Component {
   }
 
   _renderControls() {
+    return null;
+
     if (!this.state.isRunning) return null;
 
     return (
@@ -166,10 +168,10 @@ class App extends React.Component {
     if (!this.state.isShowingNux) return null;
 
     return (
-        <View style={{position: 'absolute', top: 0, left: 0, bottom: 0, right: 0, backgroundColor: 'rgba(135, 206, 250, 0.8)', flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'column'}}>
+        <View style={{position: 'absolute', top: 0, left: 0, bottom: 0, right: 0, backgroundColor: 'rgba(135, 206, 250, 0.9)', flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'column'}}>
           <TouchableWithoutFeedback onPress={this._doneWithNux} >
             <View>
-              <Text style={styles.nuxText}>Reel in the fish to earn points before the time runs out! Touch the text to start.</Text>
+              <Text style={styles.nuxText}>Reel in the fish to earn points before the time runs out! Touch a side of the screen to move in that direction and swipe up or down to reel in or out. Touch this to start!</Text>
             </View>
           </TouchableWithoutFeedback>
         </View>
@@ -180,7 +182,7 @@ class App extends React.Component {
     if (!this.state.isShowingMainMenu) return null;
 
     return (
-      <View style={{position: 'absolute', top: 0, left: 0, bottom: 0, right: 0, backgroundColor: 'rgba(135, 206, 250, 0.8)', flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'column'}}>
+      <View style={{position: 'absolute', top: 0, left: 0, bottom: 0, right: 0, backgroundColor: 'rgba(135, 206, 250, 0.9)', flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'column'}}>
         <TouchableWithoutFeedback onPress={this._doneWithMainMenu} >
           <View>
             <Text style={styles.mainMenuText}>You scored {this.state.score}! Touch to try again.</Text>
