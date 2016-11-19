@@ -240,11 +240,21 @@ class App extends React.Component {
   _renderMainMenu() {
     if (!this.state.isShowingMainMenu) return null;
 
+    let score = this.state.score;
+    let message = `You scored ${score}!`;
+    if (score < 0) {
+      message = `Uhhh you scored ${score}... better luck next time..`;
+    } else if (score > 100) {
+      message = `${score} points! Triple digits!`;
+    } else if (score > 250) {
+      message = `WOW! You scored ${score} points!`;
+    }
+
     return (
       <View style={{position: 'absolute', top: 0, left: 0, bottom: 0, right: 0, backgroundColor: 'rgba(135, 206, 250, 0.9)', flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'column'}}>
         <TouchableWithoutFeedback onPress={this._doneWithMainMenu} >
           <View>
-            <Text style={styles.mainMenuText}>You scored {this.state.score}! Touch to try again.</Text>
+            <Text style={styles.mainMenuText}>{message} Touch to try again.</Text>
           </View>
         </TouchableWithoutFeedback>
       </View>
