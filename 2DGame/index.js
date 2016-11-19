@@ -213,12 +213,14 @@ export default class Game extends React.Component {
     this.lastAngle = Math.PI/2.0;
     this.angularMomentum = 0;
     this.lineHeight = 1.0;
-    this.lineGeometry = new THREE.PlaneBufferGeometry(0.02, 1.0);
-    this.lineMaterial = new THREE.MeshBasicMaterial({
+    this.lineGeometry = new THREE.Geometry();
+    this.lineGeometry.vertices.push(new THREE.Vector3(0, 0, 0));
+    this.lineGeometry.vertices.push(new THREE.Vector3(1, 1, 0));
+    this.lineMaterial = new THREE.LineBasicMaterial({
       color: 0x777777,
+      linewidth: 10,
     });
-    this.lineMesh = new THREE.Mesh(this.lineGeometry, this.lineMaterial);
-    this.lineMesh.position.y = 0.5;
+    this.lineMesh = new THREE.Line(this.lineGeometry, this.lineMaterial);
     this.lineMesh.position.z = 10;
     this.scene.add(this.lineMesh);
 
@@ -696,7 +698,7 @@ export default class Game extends React.Component {
 
     this.boatMesh.position.x = this.boatx;
 
-    this.lineMesh.scale.y = this.lineHeight - this.hookHeight/2.0; // can't be 0
+    //this.lineMesh.scale.y = this.lineHeight - this.hookHeight/2.0; // can't be 0
 
     let time = this.time();
     this.waterMaterial.uniforms[ 'time' ].value = time;
@@ -717,15 +719,22 @@ export default class Game extends React.Component {
     let lineX = this.boatx + (Math.cos(this.lastAngle) * this.lineHeight);
     let lineY = topOfWaterY - (Math.sin(this.lastAngle) * this.lineHeight);
 
-    this.lineMesh.rotation.z = Math.PI/2.0 - this.lastAngle;
-    this.lineMesh.position.x = (this.boatx) + Math.cos(this.lastAngle) * this.lineMesh.scale.y * 0.5;
-    this.lineMesh.position.y = (topOfWaterY - this.lineHeight/2.0 + this.hookHeight/2.0) + Math.sin(this.lastAngle) * this.lineMesh.scale.y * 0.5 * 0.02;
+    let lineAngle = Math.atan2(topOfWaterY - lineY, this.boatx - lineX) - Math.PI/2.0;
+    this.lineGeometry.vertices[0].x = this.boatx;
+    this.lineGeometry.vertices[0].y = topOfWaterY;
+    this.lineGeometry.vertices[1].x = this.boatx + Math.cos(lineAngle - Math.PI/2) * (this.lineHeight - this.hookHeight + 0.05);
+    this.lineGeometry.vertices[1].y = topOfWaterY + Math.sin(lineAngle - Math.PI/2) * (this.lineHeight - this.hookHeight + 0.05);
 
-    this.hookMesh.position.x = lineX;
-    this.hookMesh.position.y = lineY + this.hookHeight/2.0;
+    this.hookMesh.rotation.z = lineAngle + Math.PI;
+    this.hookMesh.position.x = lineX + Math.cos(lineAngle + Math.PI/2) * this.hookHeight/2.0;
+    this.hookMesh.position.y = lineY + Math.sin(lineAngle + Math.PI/2) * this.hookHeight/2.0;
     if (this.hookMesh.position.y > topOfWaterY) {
-      //this.hookMesh.position.y = topOfWaterY;
+      this.hookMesh.position.y = topOfWaterY;
     }
+    if (this.lineGeometry.vertices[1].y > topOfWaterY) {
+      this.lineGeometry.vertices[1].y = topOfWaterY;
+    }
+    this.lineGeometry.verticesNeedUpdate = true;
 
     if (this.state.isRunning) {
       for (let i = this.fishes.length - 1; i >= 0; i--) {
