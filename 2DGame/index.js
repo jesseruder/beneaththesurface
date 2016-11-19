@@ -62,11 +62,13 @@ const boatwidth = 0.5;
 const boatheight = 0.5;
 const MAX_FISHES = 8;
 const MAX_SHARKS = 2;
+const MAX_SCUBAS = 2;
 const MAX_CLOUDS = 5;
 const SHARK_EAT_DIST = 0.3;
 const MESH_ID_FISH = 'fish';
 const MESH_ID_SPECIAL_FISH = 'specialFish';
 const MESH_ID_SHARK = 'shark';
+const MESH_ID_SCUBA = 'scuba';
 const MESH_ID_BOMB = 'bomb';
 const MAX_BOMBS = 20;
 const BOMB_INITIAL_RADIUS = 0.1;
@@ -287,6 +289,22 @@ export default class Game extends React.Component {
 
 
 
+    //// SCUBA DIVER
+    this.scubaTexture = THREEView.textureFromAsset(Assets['scubadiver']);
+    this.scubaTexture.minFilter = this.scubaTexture.magFilter = THREE.NearestFilter;
+    this.scubaTexture.needsUpdate = true;
+    this.scubaMaterial = new THREE.MeshBasicMaterial({
+      map: this.scubaTexture,
+      transparent: true,  // Use the image's alpha channel for alpha.
+    });
+    this.scubaMaterial.side = THREE.DoubleSide;
+    this.meshPool[MESH_ID_SCUBA] = [];
+    for (let i = 0; i < MAX_SCUBAS + 2; i++) {
+      this.meshPool[MESH_ID_SCUBA].push(new THREE.Mesh(this.fishGeometry, this.scubaMaterial));
+    }
+
+
+
     //// BOMB
     this.bombGeometry = new THREE.PlaneBufferGeometry(0.2, 0.2);
     this.bombTexture = THREEView.textureFromAsset(Assets['bomb']);
@@ -464,6 +482,7 @@ export default class Game extends React.Component {
       size: 0.3,
       points: 10,
       bombPoints: 0,
+      eatenPoints: 0,
       tickFn: null,
       width: 1,
       height: 1,
@@ -524,6 +543,30 @@ export default class Game extends React.Component {
     this.fishes.push(fish);
   }
 
+  addscuba = (time) => {
+    let fish = this.newfish(time, {
+      isScuba: true,
+      speed: 0.27,
+      points: -50,
+      bombPoints: -50,
+      eatenPoints: -10,
+      width: 2,
+      tickFn: (fish, dt, time) => {
+        if (fish.x < this.leftScreen - 0.15 || fish.x > this.rightScreen + 0.15) {
+          return true;
+        }
+
+        return false;
+      },
+    }, () => {
+      return {
+        mesh: this.meshPool[MESH_ID_SCUBA].pop(),
+        meshId: MESH_ID_SCUBA,
+      };
+    });
+    this.fishes.push(fish);
+  }
+
   addshark = (time) => {
     let fish = this.newfish(time, {
       isFish: false,
@@ -541,6 +584,9 @@ export default class Game extends React.Component {
             if (dist < SHARK_EAT_DIST) {
               otherfish.shouldDestroy = true;
               this.addExplosion(otherfish.x, otherfish.y);
+              if (otherfish.eatenPoints !== 0) {
+                this.updateScore(otherfish.eatenPoints);
+              }
             }
           }
         }
@@ -751,7 +797,7 @@ export default class Game extends React.Component {
       }
 
       let numFishes = this.countFishesWithFn((fish) => fish.isFish);
-      if (numFishes < MAX_FISHES && Math.random() < dt / 5.0) {
+      if (numFishes < MAX_FISHES && Math.random() < dt / 3.0) {
         this.addfish(time);
       }
 
@@ -762,6 +808,11 @@ export default class Game extends React.Component {
       let numSharks = this.countFishesWithFn((fish) => fish.isShark);
       if (numSharks < MAX_SHARKS && numFishes > 2 && Math.random() < dt / 10.0) {
         this.addshark(time);
+      }
+
+      let numScubas = this.countFishesWithFn((fish) => fish.isScuba);
+      if (numScubas < MAX_SCUBAS && Math.random() < dt / 10.0) {
+        this.addscuba(time);
       }
 
       for (let i = this.bombs.length - 1; i >= 0; i--) {

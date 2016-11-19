@@ -230,7 +230,7 @@ class App extends React.Component {
         <View style={{position: 'absolute', top: 0, left: 0, bottom: 0, right: 0, backgroundColor: 'rgba(135, 206, 250, 0.9)', flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'column'}}>
           <TouchableWithoutFeedback onPress={this._doneWithNux} >
             <View>
-              <Text style={styles.nuxText}>Reel in the fish to earn points before the time runs out! Swipe left/right to move you boat and up/down to reel in/out. Touch this to start!</Text>
+              <Text style={styles.nuxText}>Reel in the fish to earn points before the time runs out! Swipe and hold left/right to move you boat and up/down to reel in/out. Touch this to start!</Text>
             </View>
           </TouchableWithoutFeedback>
         </View>
